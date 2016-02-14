@@ -527,10 +527,10 @@ class Func(Expression):
             arg_sql, arg_params = compiler.compile(arg)
             sql_parts.append(arg_sql)
             params.extend(arg_params)
-        # if function is None:
-        #     self.extra['function'] = self.extra.get('function', self.function)
-        # else:
-        #     self.extra['function'] = function
+        if function is None:
+            self.extra['function'] = self.extra.get('function', self.function)
+        else:
+            self.extra['function'] = function
         self.extra['expressions'] = self.extra['field'] = self.arg_joiner.join(sql_parts)
         template = template or self.extra.get('template', self.template)
         return template % self.extra, params
@@ -758,7 +758,8 @@ class When(Expression):
     def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
         c = self.copy()
         c.is_summary = summarize
-        c.condition = c.condition.resolve_expression(query, allow_joins, reuse, summarize, False)
+        if hasattr(c.condition, 'resolve_expression'):
+            c.condition = c.condition.resolve_expression(query, allow_joins, reuse, summarize, False)
         c.result = c.result.resolve_expression(query, allow_joins, reuse, summarize, for_save)
         return c
 
