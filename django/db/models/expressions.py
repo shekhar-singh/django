@@ -432,7 +432,7 @@ class DurationExpression(CombinedExpression):
                     return connection.ops.format_for_duration_arithmetic(sql), params
         return compiler.compile(side)
 
-    def as_sql(self, compiler, connection,*kwargs):
+    def as_sql(self, compiler, connection,**kwargs):
         connection.ops.check_expression_support(self)
         expressions = []
         expression_params = []
