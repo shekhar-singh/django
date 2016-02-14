@@ -654,7 +654,7 @@ class Col(Expression):
         return "{}({}, {})".format(
             self.__class__.__name__, self.alias, self.target)
 
-    def as_sql(self, compiler, connection,*kwargs):
+    def as_sql(self, compiler, connection,**kwargs):
         qn = compiler.quote_name_unless_alias
         return "%s.%s" % (qn(self.alias), qn(self.target.column)), []
 
