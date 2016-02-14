@@ -145,7 +145,7 @@ class BaseExpression(object):
             ) for arg in expressions
         ]
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         """
         Responsible for returning a (sql, [params]) tuple to be included
         in the current query.
@@ -385,7 +385,7 @@ class CombinedExpression(Expression):
     def set_source_expressions(self, exprs):
         self.lhs, self.rhs = exprs
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         try:
             lhs_output = self.lhs.output_field
         except FieldError:
@@ -432,7 +432,7 @@ class DurationExpression(CombinedExpression):
                     return connection.ops.format_for_duration_arithmetic(sql), params
         return compiler.compile(side)
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,*kwargs):
         connection.ops.check_expression_support(self)
         expressions = []
         expression_params = []
@@ -479,8 +479,8 @@ class Func(Expression):
     """
     A SQL function call.
     """
-    function = None
-    template = '%(function)s(%(expressions)s)'
+    #function = None
+    #template = '%(function)s(%(expressions)s)'
     arg_joiner = ', '
     arity = None  # The number of arguments the function accepts.
 
@@ -497,7 +497,7 @@ class Func(Expression):
         output_field = extra.pop('output_field', None)
         super(Func, self).__init__(output_field=output_field)
         self.source_expressions = self._parse_expressions(*expressions)
-        self.extra = extra
+        self.extra = kwargs
 
     def __repr__(self):
         args = self.arg_joiner.join(str(arg) for arg in self.source_expressions)
@@ -519,7 +519,7 @@ class Func(Expression):
             c.source_expressions[pos] = arg.resolve_expression(query, allow_joins, reuse, summarize, for_save)
         return c
 
-    def as_sql(self, compiler, connection, function=None, template=None):
+    def as_sql(self, compiler, connection, **kwargs):
         connection.ops.check_expression_support(self)
         sql_parts = []
         params = []
@@ -527,10 +527,10 @@ class Func(Expression):
             arg_sql, arg_params = compiler.compile(arg)
             sql_parts.append(arg_sql)
             params.extend(arg_params)
-        if function is None:
-            self.extra['function'] = self.extra.get('function', self.function)
-        else:
-            self.extra['function'] = function
+        # if function is None:
+        #     self.extra['function'] = self.extra.get('function', self.function)
+        # else:
+        #     self.extra['function'] = function
         self.extra['expressions'] = self.extra['field'] = self.arg_joiner.join(sql_parts)
         template = template or self.extra.get('template', self.template)
         return template % self.extra, params
@@ -570,7 +570,7 @@ class Value(Expression):
     def __repr__(self):
         return "{}({})".format(self.__class__.__name__, self.value)
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         connection.ops.check_expression_support(self)
         val = self.value
         # check _output_field to avoid triggering an exception
@@ -596,7 +596,7 @@ class Value(Expression):
 
 
 class DurationValue(Value):
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         connection.ops.check_expression_support(self)
         if (connection.features.has_native_duration_field and
                 connection.features.driver_supports_timedelta_args):
@@ -614,7 +614,7 @@ class RawSQL(Expression):
     def __repr__(self):
         return "{}({}, {})".format(self.__class__.__name__, self.sql, self.params)
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         return '(%s)' % self.sql, self.params
 
     def get_group_by_cols(self):
@@ -636,7 +636,7 @@ class Random(Expression):
     def __repr__(self):
         return "Random()"
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         return connection.ops.random_function_sql(), []
 
 
@@ -654,7 +654,7 @@ class Col(Expression):
         return "{}({}, {})".format(
             self.__class__.__name__, self.alias, self.target)
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,*kwargs):
         qn = compiler.quote_name_unless_alias
         return "%s.%s" % (qn(self.alias), qn(self.target.column)), []
 
@@ -697,7 +697,7 @@ class Ref(Expression):
     def relabeled_clone(self, relabels):
         return self
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         return "%s" % connection.ops.quote_name(self.refs), []
 
     def get_group_by_cols(self):
@@ -720,7 +720,7 @@ class ExpressionWrapper(Expression):
     def get_source_expressions(self):
         return [self.expression]
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         return self.expression.as_sql(compiler, connection)
 
     def __repr__(self):
@@ -758,12 +758,11 @@ class When(Expression):
     def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
         c = self.copy()
         c.is_summary = summarize
-        if hasattr(c.condition, 'resolve_expression'):
-            c.condition = c.condition.resolve_expression(query, allow_joins, reuse, summarize, False)
+        c.condition = c.condition.resolve_expression(query, allow_joins, reuse, summarize, False)
         c.result = c.result.resolve_expression(query, allow_joins, reuse, summarize, for_save)
         return c
 
-    def as_sql(self, compiler, connection, template=None):
+    def as_sql(self, compiler, connection, **kwargs):
         connection.ops.check_expression_support(self)
         template_params = {}
         sql_params = []
@@ -834,7 +833,7 @@ class Case(Expression):
         c.cases = c.cases[:]
         return c
 
-    def as_sql(self, compiler, connection, template=None, extra=None):
+    def as_sql(self, compiler, connection, **kwargs):#template=None, extra=None
         connection.ops.check_expression_support(self)
         if not self.cases:
             return compiler.compile(self.default)
@@ -886,7 +885,7 @@ class Date(Expression):
             )
         return copy
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         sql, params = self.col.as_sql(compiler, connection)
         assert not(params)
         return connection.ops.date_trunc_sql(self.lookup_type, sql), []
@@ -937,7 +936,7 @@ class DateTime(Expression):
         )
         return copy
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         sql, params = self.col.as_sql(compiler, connection)
         assert not(params)
         return connection.ops.datetime_trunc_sql(self.lookup_type, sql, self.tzname)
@@ -980,7 +979,7 @@ class OrderBy(BaseExpression):
     def get_source_expressions(self):
         return [self.expression]
 
-    def as_sql(self, compiler, connection):
+    def as_sql(self, compiler, connection,**kwargs):
         connection.ops.check_expression_support(self)
         expression_sql, params = compiler.compile(self.expression)
         placeholders = {
